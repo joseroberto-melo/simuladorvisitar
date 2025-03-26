@@ -1,25 +1,47 @@
-import httpx
-import asyncio
-import random
+from flask import Flask, request, jsonify, render_template_string
+import threading
 
-proxies = [
-    "http://usuario:senha@proxy1:porta",
-    "http://usuario:senha@proxy2:porta",
-    # ... lista de proxies rotativos
-]
+app = Flask(__name__)
 
-url = "https://seusite.onrender.com/"
+# Set para armazenar IPs únicos
+ips_visitantes = set()
+# Lock para evitar problemas com concorrência
+lock = threading.Lock()
 
-async def acessar(proxy):
-    try:
-        async with httpx.AsyncClient(proxies={"http://": proxy, "https://": proxy}, timeout=10) as client:
-            r = await client.get(url)
-            print(f"{proxy} -> {r.status_code}")
-    except Exception as e:
-        print(f"{proxy} -> ERRO: {e}")
+# HTML simples com contador ao vivo
+HTML = '''
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Notícia Incrível!</title>
+    <script>
+        async function atualizarContador() {
+            const res = await fetch("/contador");
+            const data = await res.json();
+            document.getElementById("contador").innerText = data.visitas;
+        }
 
-async def main():
-    tasks = [acessar(random.choice(proxies)) for _ in range(100)]
-    await asyncio.gather(*tasks)
+        setInterval(atualizarContador, 1000);
+        window.onload = atualizarContador;
+    </script>
+</head>
+<body>
+    <h1>Notícia Incrível!</h1>
+    <p>Essa é uma notícia de teste para contagem de visitas em tempo real.</p>
+    <h2>Visitas únicas: <span id="contador">0</span></h2>
+</body>
+</html>
+'''
 
-asyncio.run(main())
+@app.route("/")
+def index():
+    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    with lock:
+        if ip not in ips_visitantes:
+            ips_visitantes.add(ip)
+    return render_template_string(HTML)
+
+@app.route("/contador")
+def contador():
+    return jsonify({"visitas": len(ips_visitantes)})
