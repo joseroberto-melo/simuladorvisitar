@@ -36,7 +36,10 @@ HTML = '''
 
 @app.route("/")
 def index():
+    # Pega o primeiro IP do header X-Forwarded-For, se existir
     ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    ip = ip.split(",")[0].strip()
+
     with lock:
         if ip not in ips_visitantes:
             ips_visitantes.add(ip)
